@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Ancient Horror — Survive the Darkness</title>
+  <meta name="description"
+    content="A survival horror game set in an ancient cursed city. Navigate the darkness, dodge the ghost, and fight for survival.">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.184.0/build/three.module.js",
+        "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.184.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+
+<body>
+  <main id="game-container">
+    <div id="ui"></div>
+    <div id="stats-hud">TIME: <span id="day-timer">05:00</span> &nbsp;&bull;&nbsp; SCORE: <span id="score">0</span>
+    </div>
+    <div id="health-bar-container">
+      <div id="health-bar"></div>
+      <div id="health-text">HEALTH</div>
+    </div>
+    <div id="ghost-health-bar-container" style="display: none;">
+      <div id="ghost-health-bar"></div>
+      <div id="ghost-health-text">GHOST</div>
+    </div>
+    <div id="crosshair">✦</div>
+  </main>
+
+  <!-- Top Right HUD (Tasks, Phone & Audio Options) -->
+  <div id="top-right-hud">
+    <button id="task-menu-btn" class="hud-btn" title="Tasks">📋 Tasks</button>
+    <button id="phone-btn" class="hud-btn" title="Phone">📱 Phone</button>
+    <button id="mute-btn" class="hud-btn" title="Mute Audio">🔊 Sound</button>
+    <div id="day-counter-hud" class="hud-btn-static">DAY <span id="day-val">1</span></div>
+  </div>
+
+  <!-- Tasks Overlay Menu -->
+  <div id="tasks-overlay">
+    <h3 class="tasks-title">Active Objectives</h3>
+    <div class="tasks-list">
+      <!-- Managed dynamically by JS -->
+    </div>
+  </div>
+
+  <!-- Phone Simulator Overlay -->
+  <div id="phone-overlay">
+    <div class="phone-header">
+      <span class="phone-time">11:43 PM</span>
+      <span class="phone-signals">⚠️ NO SIGNAL</span>
+    </div>
+
+    <!-- Phone Content Container -->
+    <div class="phone-content" style="padding: 0;">
+      <!-- 1. Home Screen -->
+      <div id="phone-screen-home" class="phone-screen">
+        <div class="phone-app-title" style="margin-top: 15px;">Main Menu</div>
+        <div class="phone-apps-grid">
+          <div class="phone-app-icon" id="app-chat-btn">
+            <span class="app-emoji">💬</span>
+            <span class="app-label">Chat</span>
+          </div>
+          <div class="phone-app-icon" id="app-maps-btn">
+            <span class="app-emoji">🗺️</span>
+            <span class="app-label">Offline Maps</span>
+          </div>
+          <div class="phone-app-icon" id="app-logs-btn">
+            <span class="app-emoji">📟</span>
+            <span class="app-label">SysLogs</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Chat Screen -->
+      <div id="phone-screen-chat" class="phone-screen hidden">
+        <div class="phone-app-header">
+          <button class="phone-back-btn" data-back="home">◀ Home</button>
+          <span>Secure Chat</span>
+        </div>
+        <div class="chat-messages" style="padding: 12px; height: calc(100% - 40px); overflow-y: auto;">
+          <div class="phone-message incoming">
+            <div class="phone-sender">Unknown</div>
+            I'm watching you. Keep your gun loaded.
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Maps Screen -->
+      <div id="phone-screen-maps" class="phone-screen hidden" style="height: 100%;">
+        <div class="phone-app-header">
+          <button class="phone-back-btn" data-back="home">◀ Home</button>
+          <span>Offline Maps</span>
+        </div>
+        <div class="map-offline-container"
+          style="position: relative; width: 100%; height: calc(100% - 40px); overflow: hidden; padding: 0; margin: 0; background: #06070a;">
+          <canvas id="phone-map-canvas" style="width: 100%; height: 100%; display: block;"></canvas>
+        </div>
+      </div>
+
+      <!-- 4. Logs Screen -->
+      <div id="phone-screen-logs" class="phone-screen hidden">
+        <div class="phone-app-header">
+          <button class="phone-back-btn" data-back="home">◀ Home</button>
+          <span>System Logs</span>
+        </div>
+        <div class="logs-container">
+          <div class="console-output" id="logs-console">SYSTEM INITIALIZED.
+            READY FOR DIAGNOSTIC EXECUTION.</div>
+          <div class="commands-list">
+            <div class="command-row">
+              <span class="cmd-text">diagnostics --check</span>
+              <button class="cmd-run-btn" data-cmd="check">RUN</button>
+            </div>
+            <div class="command-row">
+              <span class="cmd-text">grid-status --reboot</span>
+              <button class="cmd-run-btn" data-cmd="reboot">RUN</button>
+            </div>
+            <div class="command-row">
+              <span class="cmd-text">comms --ping</span>
+              <button class="cmd-run-btn" data-cmd="ping">RUN</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phone-footer">
+      <button class="phone-home-btn" id="phone-close-btn" title="Home / Close"></button>
+    </div>
+  </div>
+
+  <!-- Start Interaction Overlay -->
+  <div id="start-interaction-overlay">
+    <div class="start-text" id="start-overlay-text">LOADING CITY...</div>
+  </div>
+
+  <!-- Atmospheric overlays -->
+  <div id="vignette-overlay"></div>
+  <div id="scanlines"></div>
+
+  <div id="game-over-screen" class="hidden">
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 30px;">
+      <h1>GAME OVER</h1>
+      <button id="respawn-button" class="play-button">RESPAWN</button>
+    </div>
+  </div>
+
+  <!-- Day Transition Overlay -->
+  <div id="day-transition-overlay" class="hidden">
+    <h1 id="transition-day-title">DAY 1</h1>
+    <p id="transition-day-subtitle">Survive the hauntings...</p>
+  </div>
+
+  <div id="rotate-device-overlay">
+    <h2>TURN DEVICE</h2>
+    <p>Please rotate your phone horizontally to play.</p>
+  </div>
+
+  <script type="module" src="game.js"></script>
+</body>
+
+</html>

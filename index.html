@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Ancient Horror — Survive the Darkness</title>
+  <meta name="description"
+    content="A survival horror game set in an ancient cursed city. Navigate the darkness, dodge the ghost, and fight for survival.">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.184.0/build/three.module.js",
+        "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.184.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+
+<body>
+  <main id="game-container"></main>
+
+  <!-- Loading / Home screen overlay -->
+  <div id="home-screen">
+    <div class="home-copy">
+      <h1 class="home-title">ANCIENT HORROR</h1>
+      <p class="loading-status" id="loading-status">Loading city scene...</p>
+      <button id="play-button" class="play-button" disabled>LOADING...</button>
+    </div>
+  </div>
+
+  <div id="rotate-device-overlay">
+    <h2>TURN DEVICE</h2>
+    <p>Please rotate your phone horizontally to play.</p>
+  </div>
+
+  <script type="module" src="loading.js"></script>
+</body>
+
+</html>
