@@ -12,6 +12,16 @@ const container = document.getElementById('game-container');
 const uiElement = document.getElementById('ui');
 const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
+// Detect device performance via Android WebView JavascriptInterface.
+// High-end mode: load all assets eagerly. Low-end mode: lazy-load SFX on first use.
+const shouldPreload = (window.AndroidConfig && typeof window.AndroidConfig.shouldPreloadAssets === 'function')
+  ? window.AndroidConfig.shouldPreloadAssets()
+  : true; // Default to full preload outside Android WebView
+
+console.log(shouldPreload
+  ? '[game.js] High-performance mode: Loading all assets eagerly.'
+  : '[game.js] Low-memory mode: SFX will be lazy-loaded on first use.');
+
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x07090f);
 scene.fog = new THREE.Fog(0x07090f, 40, 300);
@@ -1071,19 +1081,23 @@ function loadCity() {
     if (phoneOverlay) phoneOverlay.classList.remove('active');
   });
 
-  audioLoader.load('sfx/gun.mp3', (buffer) => {
+  // --- Audio Loading ---
+  // On high-end devices (shouldPreload=true), load all SFX immediately.
+  // On low-end devices, defer each SFX load until it is first needed to save RAM.
+
+  function initGunSound(buffer) {
     gunSound.setBuffer(buffer);
     gunSound.setVolume(isMuted ? 0 : 0.5);
-  });
-  audioLoader.load('sfx/ouch.mp3', (buffer) => {
+  }
+  function initOuchSound(buffer) {
     try {
       ouchSound.setBuffer(buffer);
       ouchSound.setVolume(isMuted ? 0 : 0.85);
     } catch (e) {
       console.warn('Failed to initialize ouch sound', e);
     }
-  });
-  audioLoader.load('sfx/walk.mp3', (buffer) => {
+  }
+  function initWalkSound(buffer) {
     try {
       walkSound.setBuffer(buffer);
       walkSound.setLoop(true);
@@ -1091,8 +1105,8 @@ function loadCity() {
     } catch (e) {
       console.warn('Failed to initialize walk sound', e);
     }
-  });
-  audioLoader.load('sfx/horror.mp3', (buffer) => {
+  }
+  function initBgMusic(buffer) {
     try {
       bgMusic.setBuffer(buffer);
       bgMusic.setLoop(true);
@@ -1101,7 +1115,48 @@ function loadCity() {
     } catch (e) {
       console.warn('Failed to initialize horror bg music', e);
     }
-  });
+  }
+
+  if (shouldPreload) {
+    // Eager load all SFX immediately
+    audioLoader.load('sfx/gun.mp3', initGunSound);
+    audioLoader.load('sfx/ouch.mp3', initOuchSound);
+    audioLoader.load('sfx/walk.mp3', initWalkSound);
+    audioLoader.load('sfx/horror.mp3', initBgMusic);
+  } else {
+    // Lazy-load SFX: each sound is fetched on first demand
+    // We use flags to ensure we only trigger each load once.
+    let gunSoundRequested = false;
+    let ouchSoundRequested = false;
+    let walkSoundRequested = false;
+    let bgMusicRequested = false;
+
+    // Expose lazy-load triggers on the window so they can be called from
+    // the shooting/walking/hit/bgmusic code paths.
+    window._lazyLoadGunSound = () => {
+      if (gunSoundRequested) return;
+      gunSoundRequested = true;
+      audioLoader.load('sfx/gun.mp3', initGunSound);
+    };
+    window._lazyLoadOuchSound = () => {
+      if (ouchSoundRequested) return;
+      ouchSoundRequested = true;
+      audioLoader.load('sfx/ouch.mp3', initOuchSound);
+    };
+    window._lazyLoadWalkSound = () => {
+      if (walkSoundRequested) return;
+      walkSoundRequested = true;
+      audioLoader.load('sfx/walk.mp3', initWalkSound);
+    };
+    window._lazyLoadBgMusic = () => {
+      if (bgMusicRequested) return;
+      bgMusicRequested = true;
+      audioLoader.load('sfx/horror.mp3', initBgMusic);
+    };
+
+    // Trigger background music load right away (it's essential atmosphere)
+    window._lazyLoadBgMusic();
+  }
 
   const objLoader = new OBJLoader(loadingManager);
   objLoader.load('models/gun.obj', (obj) => {
@@ -1780,6 +1835,9 @@ function updateMovement(delta) {
         walkSound.play();
       }
       walkSound.setPlaybackRate(moveSpeedMultiplier === 1.75 ? 1.45 : 1.0);
+    } else if (!shouldPreload && window._lazyLoadWalkSound) {
+      // Lazy-load walk sound on first footstep (low-end devices)
+      window._lazyLoadWalkSound();
     }
   } else {
     if (walkSound && walkSound.isPlaying) {
@@ -1899,6 +1957,7 @@ function animate() {
         try {
           if (ouchSound && ouchSound.isPlaying) ouchSound.stop();
           if (ouchSound && ouchSound.buffer) ouchSound.play();
+          else if (!shouldPreload && window._lazyLoadOuchSound) window._lazyLoadOuchSound();
         } catch (e) { }
 
         if (health <= 0) {
@@ -1915,8 +1974,13 @@ function animate() {
   }
 
   if (isShooting && gunMesh && clock.elapsedTime - lastShootTime > shootRate) {
-    if (gunSound.isPlaying) gunSound.stop();
-    gunSound.play();
+    if (gunSound.buffer) {
+      if (gunSound.isPlaying) gunSound.stop();
+      gunSound.play();
+    } else if (!shouldPreload && window._lazyLoadGunSound) {
+      // Lazy-load gun sound on first shot (low-end devices)
+      window._lazyLoadGunSound();
+    }
 
     // Quick recoil animation
     gunMesh.position.z = -0.7;

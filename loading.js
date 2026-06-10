@@ -55,6 +55,18 @@ loadingManager.onError = (url) => {
 
 const gltfLoader = new GLTFLoader(loadingManager);
 
+// Detect device performance via Android WebView JavascriptInterface
+// On high-end devices (4GB+ RAM), preload all assets into RAM/VRAM upfront.
+// On low-end devices, skip bulk preloading to conserve memory — game.js will
+// lazy-load these assets on demand instead.
+const shouldPreload = (window.AndroidConfig && typeof window.AndroidConfig.shouldPreloadAssets === 'function')
+  ? window.AndroidConfig.shouldPreloadAssets()
+  : true; // Default to preloading when running outside the Android WebView (e.g. desktop browser)
+
+console.log(shouldPreload
+  ? 'High-end device detected: Preloading all 3D models and SFX into RAM/VRAM.'
+  : 'Low-end device detected: Skipping bulk preload to save memory.');
+
 let cityScene = null;
 let cityCamera = null;
 let cityMixer = null;
@@ -236,16 +248,20 @@ function onCityLoadError(error) {
 
 gltfLoader.load('models/city-1.glb', onCityLoaded, undefined, onCityLoadError);
 
-// Preload other game assets (except the ghost) using the loadingManager
-const audioLoader = new THREE.AudioLoader(loadingManager);
-audioLoader.load('sfx/gun.mp3', () => { });
-audioLoader.load('sfx/ouch.mp3', () => { });
-audioLoader.load('sfx/walk.mp3', () => { });
-audioLoader.load('sfx/horror.mp3', () => { });
+// Preload other game assets (except the ghost) using the loadingManager.
+// On low-end devices, skip this bulk preload — game.js will load them on demand.
+if (shouldPreload) {
+  const audioLoader = new THREE.AudioLoader(loadingManager);
+  audioLoader.load('sfx/gun.mp3', () => { });
+  audioLoader.load('sfx/ouch.mp3', () => { });
+  audioLoader.load('sfx/walk.mp3', () => { });
+  audioLoader.load('sfx/horror.mp3', () => { });
 
-
-const objLoader = new OBJLoader(loadingManager);
-objLoader.load('models/gun.obj', () => { });
+  const objLoader = new OBJLoader(loadingManager);
+  objLoader.load('models/gun.obj', () => { });
+} else {
+  console.log('Skipping SFX and gun.obj preload for low-end device.');
+}
 
 // Thoroughly dispose all Three.js / WebGL resources so the GPU memory is
 // freed before the browser creates a brand-new context on game.html.
