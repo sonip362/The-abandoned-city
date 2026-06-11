@@ -494,7 +494,7 @@ function reportIssue(message) {
 function scaleImportedLights(root) {
   root.traverse((child) => {
     const name = (child.name || '').toLowerCase();
-    
+
     // Disable directional lights completely (to hide the sun)
     if (child.isDirectionalLight) {
       child.intensity = 0;
@@ -750,7 +750,7 @@ function spawnGhostInstance() {
   }
 
   const newMesh = ghostTemplate.clone();
-  
+
   // Set position and make it visible. Lower Y position so it doesn't spawn too high.
   const ghostYOffset = -1.2;
   newMesh.position.set(x, spawnGroundY + ghostYOffset, z);
@@ -815,7 +815,7 @@ function spawnGhostsForDay() {
 function winGame() {
   setUi('You survived the 100 days hauntings!');
   controls.unlock();
-  
+
   const winScreen = document.getElementById('win-screen');
   if (winScreen) winScreen.classList.remove('hidden');
 
@@ -919,7 +919,7 @@ function showDayTransition() {
   if (!overlay) return;
 
   title.textContent = `DAY ${currentDay}`;
-  
+
   let msg = "Survive the hauntings...";
   if (currentDay === 1) {
     msg = "A faint chill in the air... The hauntings begin.";
@@ -938,7 +938,7 @@ function showDayTransition() {
   } else if (currentDay === 100) {
     msg = "THE FINAL NIGHT. Survive to break the ancient curse!";
   }
-  
+
   subtitle.textContent = msg;
 
   overlay.style.display = 'flex';
@@ -957,27 +957,27 @@ function showDayTransition() {
 
 function advanceToNextDay() {
   currentDay++;
-  
+
   if (currentDay > 100) {
     winGame();
     return;
   }
-  
+
   dayTimeRemaining = 300; // 5 minutes
-  
+
   if (typeof localStorage !== 'undefined') {
     localStorage.setItem('currentDay', currentDay);
   }
-  
+
   try {
     if (ouchSound && ouchSound.isPlaying) ouchSound.stop();
     if (ouchSound && ouchSound.buffer) ouchSound.play();
-  } catch (e) {}
-  
+  } catch (e) { }
+
   updatePlayerMaxHealth();
   health = maxHealth;
   updateHealthHUD();
-  
+
   showDayTransition();
   updateDayTimerDisplay();
   spawnGhostsForDay();
@@ -1054,7 +1054,7 @@ function loadCity() {
   healthTextElement = document.getElementById('health-text');
   ghostHealthElement = document.getElementById('ghost-health-bar');
   ghostHealthContainer = document.getElementById('ghost-health-bar-container');
-  
+
   if (typeof localStorage !== 'undefined') {
     const savedDay = localStorage.getItem('currentDay');
     currentDay = savedDay ? (parseInt(savedDay) || 1) : 1;
@@ -1063,11 +1063,11 @@ function loadCity() {
   }
   dayTimeRemaining = 300; // 5 minutes in real life
   updateDayTimerDisplay();
-  
+
   updatePlayerMaxHealth();
   health = maxHealth;
   updateHealthHUD();
-  
+
   updateTasksUi();
 
   // Top HUD Buttons & Overlays Wire-up
@@ -1291,7 +1291,7 @@ function loadCity() {
   }
 
   const objLoader = new OBJLoader(loadingManager);
-  objLoader.load('models/gun.obj', (obj) => {
+  objLoader.load('models/gun.glb', (obj) => {
     gunMesh = obj;
     gunMesh.traverse((child) => {
       if (child.isMesh) {

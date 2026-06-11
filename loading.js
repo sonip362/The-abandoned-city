@@ -258,9 +258,9 @@ if (shouldPreload) {
   audioLoader.load('sfx/horror.mp3', () => { });
 
   const objLoader = new OBJLoader(loadingManager);
-  objLoader.load('models/gun.obj', () => { });
+  objLoader.load('models/gun.glb', () => { });
 } else {
-  console.log('Skipping SFX and gun.obj preload for low-end device.');
+  console.log('Skipping SFX and gun.glb preload for low-end device.');
 }
 
 // Thoroughly dispose all Three.js / WebGL resources so the GPU memory is
