@@ -24,13 +24,16 @@ console.log(shouldPreload
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x07090f);
-scene.fog = new THREE.Fog(0x07090f, 40, 300);
+const fogFar = shouldPreload ? 300 : 200;
+const fogNear = shouldPreload ? 40 : 20;
+scene.fog = new THREE.Fog(0x07090f, fogNear, fogFar);
 
+const cameraFar = shouldPreload ? 1200 : 300;
 const camera = new THREE.PerspectiveCamera(
   65,
   window.innerWidth / window.innerHeight,
   0.1,
-  1200
+  cameraFar
 );
 
 const listener = new THREE.AudioListener();
@@ -1328,8 +1331,9 @@ function loadCity() {
     scene.add(camera);
   });
 
+  const cityModelPath = shouldPreload ? 'models/city.glb' : 'models/city-1.glb';
   loader.load(
-    'models/city.glb',
+    cityModelPath,
     (gltf) => {
       cityScene = gltf.scene;
       prepareCityMaterials(cityScene);
@@ -1586,7 +1590,7 @@ let moveSpeedMultiplier = 1;
 function handleResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.setSize(window.innerWidth, window.innerHeight);
 }
 

@@ -12,13 +12,16 @@ const playButton = document.getElementById('play-button');
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x07090f);
-scene.fog = new THREE.Fog(0x07090f, 40, 300);
+const fogFar = shouldPreload ? 300 : 200;
+const fogNear = shouldPreload ? 40 : 20;
+scene.fog = new THREE.Fog(0x07090f, fogNear, fogFar);
 
+const cameraFar = shouldPreload ? 10000 : 400;
 const camera = new THREE.PerspectiveCamera(
   60,
   window.innerWidth / window.innerHeight,
   0.01,
-  10000
+  cameraFar
 );
 camera.position.set(0, 8, 24);
 scene.add(camera);
@@ -246,7 +249,8 @@ function onCityLoadError(error) {
 }
 
 
-gltfLoader.load('models/city-1.glb', onCityLoaded, undefined, onCityLoadError);
+const cityModelPath = 'models/city-1.glb';
+gltfLoader.load(cityModelPath, onCityLoaded, undefined, onCityLoadError);
 
 // Preload other game assets (except the ghost) using the loadingManager.
 // On low-end devices, skip this bulk preload — game.js will load them on demand.
@@ -325,7 +329,7 @@ playButton.addEventListener('click', () => {
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
