@@ -63,9 +63,9 @@ let isShooting = false;
 let lastShootTime = 0;
 const shootRate = 0.15;
 
-let ghostMesh = null;
+let ghostTemplate = null;
+let activeGhosts = [];
 let score = 0;
-let ghostHealth = 100;
 let lastGhostAttackTime = 0;
 const shootRaycaster = new THREE.Raycaster();
 
@@ -163,7 +163,9 @@ const spawnX = -7.75;
 const spawnZ = 6.78;
 const spawnGroundY = -0.5;
 let health = 100;
+let maxHealth = 100;
 let healthElement = null;
+let healthTextElement = null;
 let velocityY = 0;
 let isFalling = false;
 let lastSaveTime = 0;
@@ -340,34 +342,36 @@ function updatePhoneMap() {
     }
   });
 
-  // Draw the Ghost (if visible and active)
-  if (ghostMesh && ghostMesh.visible) {
-    const gx = (ghostMesh.position.x - playerX) * scale;
-    const gz = (ghostMesh.position.z - playerZ) * scale;
+  // Draw all active ghosts (if visible)
+  activeGhosts.forEach((ghost) => {
+    if (ghost.mesh && ghost.mesh.visible) {
+      const gx = (ghost.mesh.position.x - playerX) * scale;
+      const gz = (ghost.mesh.position.z - playerZ) * scale;
 
-    // Pulse red danger indicators
-    const pulseRadius = 7 + (Date.now() % 1000) / 150 * 2.0;
-    ctx.strokeStyle = 'rgba(255, 30, 30, 0.75)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(gx, gz, pulseRadius, 0, Math.PI * 2);
-    ctx.stroke();
+      // Pulse red danger indicators
+      const pulseRadius = 7 + (Date.now() % 1000) / 150 * 2.0;
+      ctx.strokeStyle = 'rgba(255, 30, 30, 0.75)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(gx, gz, pulseRadius, 0, Math.PI * 2);
+      ctx.stroke();
 
-    ctx.fillStyle = '#ff1e1e';
-    ctx.beginPath();
-    ctx.arc(gx, gz, 4.5, 0, Math.PI * 2);
-    ctx.fill();
+      ctx.fillStyle = '#ff1e1e';
+      ctx.beginPath();
+      ctx.arc(gx, gz, 4.5, 0, Math.PI * 2);
+      ctx.fill();
 
-    // Draw target indicator label (rotated straight so it reads easily)
-    ctx.save();
-    ctx.translate(gx, gz);
-    ctx.rotate(yawAngle - Math.PI); // Counter-rotate text so it stays horizontally readable
-    ctx.fillStyle = '#ff1e1e';
-    ctx.font = 'bold 7px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText('⚠️ TARGET', 0, -10);
-    ctx.restore();
-  }
+      // Draw target indicator label (rotated straight so it reads easily)
+      ctx.save();
+      ctx.translate(gx, gz);
+      ctx.rotate(yawAngle - Math.PI); // Counter-rotate text so it stays horizontally readable
+      ctx.fillStyle = '#ff1e1e';
+      ctx.font = 'bold 7px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('⚠️ TARGET', 0, -10);
+      ctx.restore();
+    }
+  });
 
   ctx.restore(); // Restore rotating context to draw fixed HUD elements on top
 
@@ -684,8 +688,34 @@ function checkSolidCollision(testX, testZ) {
   return false; // Make all walls/buildings enterable
 }
 
-function spawnGhost() {
-  if (!ghostMesh || cityBounds.isEmpty()) return;
+function updatePlayerMaxHealth() {
+  if (currentDay <= 5) {
+    maxHealth = 100 + (currentDay - 1) * 12.5; // Days 1-5: 100 to 150 HP
+  } else {
+    const progressionFactor = (currentDay - 5) / 95;
+    maxHealth = 200 + progressionFactor * 2800; // Days 6-100: 200 to 3000 HP
+  }
+  maxHealth = Math.round(maxHealth);
+}
+
+function updateHealthHUD() {
+  if (healthElement) {
+    healthElement.style.width = Math.max(0, (health / maxHealth) * 100) + '%';
+  }
+  if (healthTextElement) {
+    healthTextElement.textContent = `HEALTH: ${Math.max(0, Math.round(health))} / ${maxHealth}`;
+  }
+}
+
+function getGhostCountForDay(day) {
+  if (day <= 5) return 1;
+  // Gradual increase: 1 ghost on Day 5, scaling up to 10 ghosts on Day 100
+  const ratio = (day - 5) / 95;
+  return 1 + Math.floor(ratio * 9); // e.g. Day 6: 1, Day 100: 10
+}
+
+function spawnGhostInstance() {
+  if (!ghostTemplate || cityBounds.isEmpty()) return null;
   const margin = 2.0;
 
   let x = 0;
@@ -719,16 +749,89 @@ function spawnGhost() {
     z = roadSpawn.z + THREE.MathUtils.randFloat(-3, 3);
   }
 
+  const newMesh = ghostTemplate.clone();
+  
   // Set position and make it visible. Lower Y position so it doesn't spawn too high.
   const ghostYOffset = -1.2;
-  ghostMesh.position.set(x, spawnGroundY + ghostYOffset, z);
-  ghostMesh.visible = true;
+  newMesh.position.set(x, spawnGroundY + ghostYOffset, z);
+  newMesh.visible = true;
+  scene.add(newMesh);
 
-  // Max health increases by 20% each day
-  const maxGhostHealth = 100 + (currentDay - 1) * 20;
-  ghostHealth = maxGhostHealth;
-  if (ghostHealthElement) ghostHealthElement.style.width = '100%';
-  if (ghostHealthContainer) ghostHealthContainer.style.display = 'block';
+  // Register its meshes for culling
+  collectCullCandidates(newMesh);
+
+  // Calculate stats based on current day
+  let maxGhostHealth, ghostSpeed, ghostDamage;
+  if (currentDay <= 5) {
+    // MUCH easier stats for the first 5 days
+    maxGhostHealth = 40 + currentDay * 10;          // Day 1: 50, Day 5: 90
+    ghostSpeed = 0.4 + currentDay * 0.1;           // Day 1: 0.5, Day 5: 0.9
+    ghostDamage = 3 + currentDay * 2;              // Day 1: 5, Day 5: 13
+  } else {
+    // Scale gradually up to 100 days
+    const progressionFactor = (currentDay - 5) / 95; // 0 to 1
+    maxGhostHealth = 100 + progressionFactor * 900;  // Day 6: 100, Day 100: 1000
+    ghostSpeed = 1.0 + progressionFactor * 2.8;     // Day 6: 1.0, Day 100: 3.8
+    ghostDamage = 25 + progressionFactor * 975;     // Day 6: 25, Day 100: 1000
+  }
+
+  return {
+    mesh: newMesh,
+    health: maxGhostHealth,
+    maxHealth: maxGhostHealth,
+    speed: ghostSpeed,
+    damage: Math.round(ghostDamage),
+    lastAttackTime: 0
+  };
+}
+
+function spawnGhostsForDay() {
+  activeGhosts.forEach((g) => {
+    if (g.mesh) {
+      scene.remove(g.mesh);
+      g.mesh.traverse((child) => {
+        if (child.isMesh) {
+          const idx = cullCandidates.indexOf(child);
+          if (idx !== -1) cullCandidates.splice(idx, 1);
+        }
+      });
+    }
+  });
+  activeGhosts.length = 0;
+
+  const targetCount = getGhostCountForDay(currentDay);
+  for (let i = 0; i < targetCount; i++) {
+    const ghost = spawnGhostInstance();
+    if (ghost) {
+      activeGhosts.push(ghost);
+    }
+  }
+
+  if (ghostHealthContainer) {
+    ghostHealthContainer.style.display = 'none';
+  }
+}
+
+function winGame() {
+  setUi('You survived the 100 days hauntings!');
+  controls.unlock();
+  
+  const winScreen = document.getElementById('win-screen');
+  if (winScreen) winScreen.classList.remove('hidden');
+
+  canMove = false;
+  activeGhosts.forEach((g) => {
+    if (g.mesh) {
+      scene.remove(g.mesh);
+      g.mesh.traverse((child) => {
+        if (child.isMesh) {
+          const idx = cullCandidates.indexOf(child);
+          if (idx !== -1) cullCandidates.splice(idx, 1);
+        }
+      });
+    }
+  });
+  activeGhosts.length = 0;
 }
 
 function clampToCityBounds(x, z) {
@@ -818,9 +921,23 @@ function showDayTransition() {
   title.textContent = `DAY ${currentDay}`;
   
   let msg = "Survive the hauntings...";
-  if (currentDay === 2) msg = "The ghost moves faster and strikes harder.";
-  else if (currentDay === 3) msg = "The supernatural energy peaks. Watch your step.";
-  else if (currentDay > 3) msg = "Survival is unlikely. Run.";
+  if (currentDay === 1) {
+    msg = "A faint chill in the air... The hauntings begin.";
+  } else if (currentDay <= 5) {
+    msg = "The curse grows, but the spirits are still weak.";
+  } else if (currentDay === 6) {
+    msg = "The initial safety is over. The spirits multiply and grow stronger.";
+  } else if (currentDay <= 20) {
+    msg = "More ghosts are crossing over. Watch your step.";
+  } else if (currentDay <= 50) {
+    msg = "The city screams. Ghost presence is escalating.";
+  } else if (currentDay <= 75) {
+    msg = "The spirits are blindingly fast and lethal. Run.";
+  } else if (currentDay < 100) {
+    msg = "Survive the endless nightmare. Almost there...";
+  } else if (currentDay === 100) {
+    msg = "THE FINAL NIGHT. Survive to break the ancient curse!";
+  }
   
   subtitle.textContent = msg;
 
@@ -840,6 +957,12 @@ function showDayTransition() {
 
 function advanceToNextDay() {
   currentDay++;
+  
+  if (currentDay > 100) {
+    winGame();
+    return;
+  }
+  
   dayTimeRemaining = 300; // 5 minutes
   
   if (typeof localStorage !== 'undefined') {
@@ -851,9 +974,13 @@ function advanceToNextDay() {
     if (ouchSound && ouchSound.buffer) ouchSound.play();
   } catch (e) {}
   
+  updatePlayerMaxHealth();
+  health = maxHealth;
+  updateHealthHUD();
+  
   showDayTransition();
   updateDayTimerDisplay();
-  spawnGhost();
+  spawnGhostsForDay();
 }
 
 
@@ -924,6 +1051,7 @@ function spawnGlowingLight() {
 
 function loadCity() {
   healthElement = document.getElementById('health-bar');
+  healthTextElement = document.getElementById('health-text');
   ghostHealthElement = document.getElementById('ghost-health-bar');
   ghostHealthContainer = document.getElementById('ghost-health-bar-container');
   
@@ -935,6 +1063,10 @@ function loadCity() {
   }
   dayTimeRemaining = 300; // 5 minutes in real life
   updateDayTimerDisplay();
+  
+  updatePlayerMaxHealth();
+  health = maxHealth;
+  updateHealthHUD();
   
   updateTasksUi();
 
@@ -1271,10 +1403,10 @@ function loadCity() {
       loader.load(
         'models/ghost.glb',
         (ghostGltf) => {
-          ghostMesh = ghostGltf.scene;
+          ghostTemplate = ghostGltf.scene;
 
           // Keep original material, just apply color space fixes
-          prepareCityMaterials(ghostMesh);
+          prepareCityMaterials(ghostTemplate);
 
           // Add a point light to the ghost so it's always illuminated (since 3D viewers use env maps)
           // Add a subtle, cool-tinted fill so the model isn't completely dark
@@ -1282,12 +1414,12 @@ function loadCity() {
           const ghostLight = new THREE.PointLight(0x99bbff, 0.35, 6, 2);
           ghostLight.position.set(0, 1.2, 0);
           ghostLight.castShadow = false;
-          ghostMesh.add(ghostLight);
+          ghostTemplate.add(ghostLight);
 
           // Also gently clamp any emissive on the model so emissive materials
           // don't appear overly bright compared to textures. Additionally,
           // normalize metalness/roughness so PBR lighting doesn't wash out the albedo.
-          ghostMesh.traverse((child) => {
+          ghostTemplate.traverse((child) => {
             if (!child.isMesh) return;
             const mats = Array.isArray(child.material) ? child.material : [child.material];
             mats.forEach((m) => {
@@ -1315,12 +1447,7 @@ function loadCity() {
           });
 
           // Scale it appropriately (may need adjustment depending on model)
-          ghostMesh.scale.set(0.05, 0.05, 0.05);
-          scene.add(ghostMesh);
-          // Register ghost sub-meshes for frustum culling
-          try {
-            collectCullCandidates(ghostMesh);
-          } catch (e) { }
+          ghostTemplate.scale.set(0.05, 0.05, 0.05);
 
           // Inspect GLTF JSON for images/materials and try to recover
           // diffuse textures if the model used the KHR_materials_pbrSpecularGlossiness extension
@@ -1345,7 +1472,7 @@ function loadCity() {
 
               // Attempt to attach textures to scene materials when missing
               const attachPromises = [];
-              ghostMesh.traverse((child) => {
+              ghostTemplate.traverse((child) => {
                 if (!child.isMesh) return;
                 const mats = Array.isArray(child.material) ? child.material : [child.material];
                 mats.forEach((m) => {
@@ -1381,7 +1508,7 @@ function loadCity() {
             console.warn('Error while inspecting ghost GLTF:', e);
           }
 
-          spawnGhost();
+          spawnGhostsForDay();
         },
         undefined,
         (error) => console.error('Error loading ghost:', error)
@@ -1490,8 +1617,6 @@ if (respawnButton) {
   respawnButton.addEventListener('click', () => {
     const spawn = getBestRoadSpawn();
     controls.object.position.set(spawn.x, spawn.y + playerEyeHeight, spawn.z);
-    health = 100;
-    if (healthElement) healthElement.style.width = '100%';
     localStorage.removeItem('playerPosition');
 
     // Reset day and timer on death
@@ -1502,11 +1627,56 @@ if (respawnButton) {
     }
     updateDayTimerDisplay();
 
-    // Respawn ghost (will reset stats to Day 1 levels)
-    spawnGhost();
+    updatePlayerMaxHealth();
+    health = maxHealth;
+    updateHealthHUD();
+
+    // Reset Win Screen visibility if active
+    const winScreen = document.getElementById('win-screen');
+    if (winScreen) winScreen.classList.add('hidden');
+
+    // Enable movement and spawn ghosts for Day 1
+    canMove = true;
+    spawnGhostsForDay();
 
     const gameOverScreen = document.getElementById('game-over-screen');
     if (gameOverScreen) gameOverScreen.classList.add('hidden');
+
+    // Lock controls again to resume playing
+    controls.lock();
+
+    // Show Day 1 transition again
+    showDayTransition();
+  });
+}
+
+// Win Screen Restart Button Handler
+const restartButton = document.getElementById('restart-button');
+if (restartButton) {
+  restartButton.addEventListener('click', () => {
+    const spawn = getBestRoadSpawn();
+    controls.object.position.set(spawn.x, spawn.y + playerEyeHeight, spawn.z);
+    localStorage.removeItem('playerPosition');
+
+    // Reset day and timer
+    currentDay = 1;
+    dayTimeRemaining = 300; // 5 minutes
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('currentDay', 1);
+    }
+    updateDayTimerDisplay();
+
+    updatePlayerMaxHealth();
+    health = maxHealth;
+    updateHealthHUD();
+
+    // Reset Win Screen visibility
+    const winScreen = document.getElementById('win-screen');
+    if (winScreen) winScreen.classList.add('hidden');
+
+    // Enable movement and spawn ghosts for Day 1
+    canMove = true;
+    spawnGhostsForDay();
 
     // Lock controls again to resume playing
     controls.lock();
@@ -1927,51 +2097,47 @@ function animate() {
     }
   }
 
-  // Ghost movement logic - slowly follow player
-  if (ghostMesh && ghostMesh.visible) {
-    // Ghost speed scales with day (+20% per day)
-    const ghostSpeedMultiplier = 1.0 + (currentDay - 1) * 0.20;
-    const ghostSpeed = 1.0 * ghostSpeedMultiplier;
-    const dx = controls.object.position.x - ghostMesh.position.x;
-    const dz = controls.object.position.z - ghostMesh.position.z;
-    const distance = Math.sqrt(dx * dx + dz * dz);
+  // Ghost movement and attack logic
+  activeGhosts.forEach((ghost) => {
+    if (ghost.mesh && ghost.mesh.visible) {
+      const dx = controls.object.position.x - ghost.mesh.position.x;
+      const dz = controls.object.position.z - ghost.mesh.position.z;
+      const distance = Math.sqrt(dx * dx + dz * dz);
 
-    if (distance > 1.5) { // Don't get uncomfortably close
-      ghostMesh.position.x += (dx / distance) * ghostSpeed * delta;
-      ghostMesh.position.z += (dz / distance) * ghostSpeed * delta;
-      // Make ghost face the player
-      ghostMesh.lookAt(controls.object.position.x, ghostMesh.position.y, controls.object.position.z);
-    } else {
-      // Attack player
-      if (clock.elapsedTime - lastGhostAttackTime > 1.0) {
-        // Ghost damage scales with day (+20% per day)
-        const damageMultiplier = 1.0 + (currentDay - 1) * 0.20;
-        const finalDamage = Math.round(15 * damageMultiplier);
-        health -= finalDamage;
-        if (healthElement) healthElement.style.width = Math.max(0, health) + '%';
-        lastGhostAttackTime = clock.elapsedTime;
-        // Flash screen red and play 'ouch' sound when player is hit
-        try {
-          flashScreenRed(140);
-        } catch (e) { }
-        try {
-          if (ouchSound && ouchSound.isPlaying) ouchSound.stop();
-          if (ouchSound && ouchSound.buffer) ouchSound.play();
-          else if (!shouldPreload && window._lazyLoadOuchSound) window._lazyLoadOuchSound();
-        } catch (e) { }
+      if (distance > 1.5) { // Don't get uncomfortably close
+        ghost.mesh.position.x += (dx / distance) * ghost.speed * delta;
+        ghost.mesh.position.z += (dz / distance) * ghost.speed * delta;
+        // Make ghost face the player
+        ghost.mesh.lookAt(controls.object.position.x, ghost.mesh.position.y, controls.object.position.z);
+      } else {
+        // Attack player
+        if (clock.elapsedTime - ghost.lastAttackTime > 1.0) {
+          health -= ghost.damage;
+          updateHealthHUD();
+          ghost.lastAttackTime = clock.elapsedTime;
+          // Flash screen red and play 'ouch' sound when player is hit
+          try {
+            flashScreenRed(140);
+          } catch (e) { }
+          try {
+            if (ouchSound && ouchSound.isPlaying) ouchSound.stop();
+            if (ouchSound && ouchSound.buffer) ouchSound.play();
+            else if (!shouldPreload && window._lazyLoadOuchSound) window._lazyLoadOuchSound();
+          } catch (e) { }
 
-        if (health <= 0) {
-          setUi('You were killed by the ghost!');
+          if (health <= 0) {
+            setUi('You were killed by the ghosts!');
 
-          // Free the mouse pointer so the user can click the button
-          controls.unlock();
+            // Free the mouse pointer so the user can click the button
+            controls.unlock();
 
-          const gameOverScreen = document.getElementById('game-over-screen');
-          if (gameOverScreen) gameOverScreen.classList.remove('hidden');
+            const gameOverScreen = document.getElementById('game-over-screen');
+            if (gameOverScreen) gameOverScreen.classList.remove('hidden');
+          }
         }
       }
     }
-  }
+  });
 
   if (isShooting && gunMesh && clock.elapsedTime - lastShootTime > shootRate) {
     if (gunSound.buffer) {
@@ -1995,22 +2161,45 @@ function animate() {
       }
     }, 50);
 
-    // Raycast hit detection
-    if (ghostMesh && ghostMesh.visible) {
+    // Raycast hit detection against all active ghosts
+    if (activeGhosts.length > 0) {
       shootRaycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-      const hits = shootRaycaster.intersectObject(ghostMesh, true);
+      let hitGhost = null;
+      let closestDistance = Infinity;
 
-      if (hits.length > 0) {
+      activeGhosts.forEach((ghost) => {
+        if (ghost.mesh && ghost.mesh.visible) {
+          const hits = shootRaycaster.intersectObject(ghost.mesh, true);
+          if (hits.length > 0 && hits[0].distance < closestDistance) {
+            closestDistance = hits[0].distance;
+            hitGhost = ghost;
+          }
+        }
+      });
+
+      if (hitGhost) {
         // We hit the ghost!
-        ghostHealth -= 20; // 5 shots to kill base health
-        const maxGhostHealth = 100 + (currentDay - 1) * 20;
+        hitGhost.health -= 20;
         if (ghostHealthElement) {
-          ghostHealthElement.style.width = Math.max(0, (ghostHealth / maxGhostHealth) * 100) + '%';
+          ghostHealthElement.style.width = Math.max(0, (hitGhost.health / hitGhost.maxHealth) * 100) + '%';
+        }
+        if (ghostHealthContainer) {
+          ghostHealthContainer.style.display = 'block';
         }
 
-        if (ghostHealth <= 0) {
-          ghostMesh.visible = false;
-          if (ghostHealthContainer) ghostHealthContainer.style.display = 'none';
+        if (hitGhost.health <= 0) {
+          scene.remove(hitGhost.mesh);
+          hitGhost.mesh.traverse((child) => {
+            if (child.isMesh) {
+              const idx = cullCandidates.indexOf(child);
+              if (idx !== -1) cullCandidates.splice(idx, 1);
+            }
+          });
+
+          const ghostIndex = activeGhosts.indexOf(hitGhost);
+          if (ghostIndex !== -1) {
+            activeGhosts.splice(ghostIndex, 1);
+          }
 
           score += 10;
           const scoreElem = document.getElementById('score');
@@ -2019,8 +2208,15 @@ function animate() {
           // Update tasks UI so player sees the quest objective completed
           updateTasksUi();
 
-          // Respawn it after a short delay
-          setTimeout(spawnGhost, 3000);
+          // Respawn it after a short delay (3 seconds) to keep the ghost count at targetCount
+          setTimeout(() => {
+            if (activeGhosts.length < getGhostCountForDay(currentDay) && health > 0 && !introActive && (controls.isLocked || isMobile)) {
+              const newGhost = spawnGhostInstance();
+              if (newGhost) {
+                activeGhosts.push(newGhost);
+              }
+            }
+          }, 3000);
         }
       }
     }
