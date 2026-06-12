@@ -14,9 +14,10 @@ const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
 // Detect device performance via Android WebView JavascriptInterface.
 // High-end mode: load all assets eagerly. Low-end mode: lazy-load SFX on first use.
-const shouldPreload = (window.AndroidConfig && typeof window.AndroidConfig.shouldPreloadAssets === 'function')
-  ? window.AndroidConfig.shouldPreloadAssets()
-  : true; // Default to full preload outside Android WebView
+const isLowEnd = (window.AndroidConfig && typeof window.AndroidConfig.isLowEndDevice === 'function')
+  ? window.AndroidConfig.isLowEndDevice()
+  : false;
+const shouldPreload = !isLowEnd;
 
 console.log(shouldPreload
   ? '[game.js] High-performance mode: Loading all assets eagerly.'
@@ -38,6 +39,15 @@ const camera = new THREE.PerspectiveCamera(
 
 const listener = new THREE.AudioListener();
 camera.add(listener);
+
+// Resume WebAudio context on first touch (critical for WebView audio autoplay policies)
+window.addEventListener('touchstart', () => {
+  if (listener.context && listener.context.state === 'suspended') {
+    listener.context.resume().then(() => {
+      console.log('AudioContext successfully resumed via user gesture.');
+    });
+  }
+}, { once: true });
 
 // No ambient lighting in the city
 
@@ -137,7 +147,7 @@ const loadingManager = new THREE.LoadingManager();
 const loader = new GLTFLoader(loadingManager);
 
 const dracoLoader = new DRACOLoader();
-dracoLoader.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/');
+dracoLoader.setDecoderPath('draco/');
 loader.setDRACOLoader(dracoLoader);
 
 let cityScene = null;
@@ -1331,7 +1341,7 @@ function loadCity() {
     scene.add(camera);
   });
 
-  const cityModelPath = shouldPreload ? 'models/city.glb' : 'models/city-1.glb';
+  const cityModelPath = isLowEnd ? 'models/city-1.glb' : 'models/city.glb';
   loader.load(
     cityModelPath,
     (gltf) => {

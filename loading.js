@@ -7,6 +7,12 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
   process.exit(0);
 }
 
+// Detect device performance via Android WebView JavascriptInterface
+const isLowEnd = (window.AndroidConfig && typeof window.AndroidConfig.isLowEndDevice === 'function')
+  ? window.AndroidConfig.isLowEndDevice()
+  : false;
+const shouldPreload = !isLowEnd;
+
 const container = document.getElementById('game-container');
 const loadingStatus = document.getElementById('loading-status');
 const playButton = document.getElementById('play-button');
@@ -59,16 +65,8 @@ loadingManager.onError = (url) => {
 
 const gltfLoader = new GLTFLoader(loadingManager);
 const dracoLoader = new DRACOLoader();
-dracoLoader.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/');
+dracoLoader.setDecoderPath('draco/');
 gltfLoader.setDRACOLoader(dracoLoader);
-
-// Detect device performance via Android WebView JavascriptInterface
-// On high-end devices (4GB+ RAM), preload all assets into RAM/VRAM upfront.
-// On low-end devices, skip bulk preloading to conserve memory — game.js will
-// lazy-load these assets on demand instead.
-const shouldPreload = (window.AndroidConfig && typeof window.AndroidConfig.shouldPreloadAssets === 'function')
-  ? window.AndroidConfig.shouldPreloadAssets()
-  : true; // Default to preloading when running outside the Android WebView (e.g. desktop browser)
 
 console.log(shouldPreload
   ? 'High-end device detected: Preloading all 3D models and SFX into RAM/VRAM.'
@@ -253,7 +251,7 @@ function onCityLoadError(error) {
 }
 
 
-const cityModelPath = 'models/city-1.glb';
+const cityModelPath = isLowEnd ? 'models/city-1.glb' : 'models/city-1.glb';
 gltfLoader.load(cityModelPath, onCityLoaded, undefined, onCityLoadError);
 
 // Preload other game assets (except the ghost) using the loadingManager.
