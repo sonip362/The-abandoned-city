@@ -264,7 +264,7 @@ if (shouldPreload) {
   audioLoader.load('sfx/horror.mp3', () => { });
 
   const objLoader = new OBJLoader(loadingManager);
-  objLoader.load('models/gun.glb', () => { });
+  objLoader.load('models/gun.obj', () => { });
 } else {
   console.log('Skipping SFX and gun.glb preload for low-end device.');
 }

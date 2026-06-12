@@ -1304,7 +1304,7 @@ function loadCity() {
   }
 
   const objLoader = new OBJLoader(loadingManager);
-  objLoader.load('models/gun.glb', (obj) => {
+  objLoader.load('models/gun.obj', (obj) => {
     gunMesh = obj;
     gunMesh.traverse((child) => {
       if (child.isMesh) {
