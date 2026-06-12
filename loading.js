@@ -59,7 +59,7 @@ loadingManager.onError = (url) => {
 
 const gltfLoader = new GLTFLoader(loadingManager);
 const dracoLoader = new DRACOLoader();
-dracoLoader.setDecoderPath('draco/');
+dracoLoader.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/');
 gltfLoader.setDRACOLoader(dracoLoader);
 
 // Detect device performance via Android WebView JavascriptInterface
