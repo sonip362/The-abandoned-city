@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 
 if (typeof window === 'undefined' || typeof document === 'undefined') {
@@ -57,6 +58,9 @@ loadingManager.onError = (url) => {
 };
 
 const gltfLoader = new GLTFLoader(loadingManager);
+const dracoLoader = new DRACOLoader();
+dracoLoader.setDecoderPath('draco/');
+gltfLoader.setDRACOLoader(dracoLoader);
 
 // Detect device performance via Android WebView JavascriptInterface
 // On high-end devices (4GB+ RAM), preload all assets into RAM/VRAM upfront.

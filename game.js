@@ -137,7 +137,7 @@ const loadingManager = new THREE.LoadingManager();
 const loader = new GLTFLoader(loadingManager);
 
 const dracoLoader = new DRACOLoader();
-dracoLoader.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/');
+dracoLoader.setDecoderPath('draco/');
 loader.setDRACOLoader(dracoLoader);
 
 let cityScene = null;
